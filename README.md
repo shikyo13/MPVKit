@@ -1,8 +1,13 @@
-> **Fork note (shikyo13/MPVKit):** identical to MPVKit 1.0.0 except that `Libmpv` is rebuilt with
-> [`0004-audiounit-survive-route-changes.patch`](Sources/BuildScripts/patch/libmpv/0004-audiounit-survive-route-changes.patch),
-> which keeps mpv's AudioUnit output (iOS/tvOS) from crashing when the audio route changes (HDMI
-> renegotiation, AirPlay, HomePod, AirPods): it reopens the output on route changes and outputs
-> silence instead of writing into buffers that no longer match. All other binaries are MPVKit's own.
+> **Fork note (shikyo13/MPVKit):** identical to MPVKit 1.0.0 except that `Libmpv` is rebuilt with two
+> patches in [`Sources/BuildScripts/patch/libmpv`](Sources/BuildScripts/patch/libmpv):
+> - `0004-audiounit-survive-route-changes.patch` keeps mpv's AudioUnit output (iOS/tvOS) from crashing
+>   when the audio route changes (HDMI renegotiation, AirPlay, HomePod, AirPods).
+> - `0005-avfoundation-pace-feeding-and-latency.patch` paces the AVFoundation output
+>   (AVSampleBufferAudioRenderer) so it keeps only the output latency plus half a second queued instead
+>   of draining mpv's buffer (which caused underruns and stutter), and schedules audio no earlier than
+>   the route can play it.
+>
+> All other binaries are MPVKit's own.
 
 # MPVKit
 

@@ -1,0 +1,71 @@
+--- a/audio/out/ao_avfoundation.m
++++ b/audio/out/ao_avfoundation.m
+@@ -30,8 +30,17 @@
+ #import <CoreAudioTypes/CoreAudioTypes.h>
+ #import <CoreFoundation/CoreFoundation.h>
+ #import <CoreMedia/CoreMedia.h>
++#include <unistd.h>
+ 
++// How much audio beyond the output latency is kept queued in the renderer.
++// AVSampleBufferAudioRenderer accepts far more than it needs; feeding it
++// everything mpv can decode drains mpv's buffer (underruns) and runs audio
++// decoding far ahead of video.
++#define QUEUE_AHEAD_NS (500LL * 1000 * 1000)
++// How long the feeding queue waits before checking again once enough is queued.
++#define THROTTLE_WAIT_US 10000
+ 
++
+ @interface AVObserver : NSObject {
+     struct ao *ao;
+ }
+@@ -45,6 +54,9 @@
+     CMAudioFormatDescriptionRef format_description;
+     AVObserver *observer;
+     int64_t end_time_av;
++    // Delay between enqueueing and hearing on the current route (about 2 s for
++    // AirPlay speakers such as HomePod, a few ms for HDMI).
++    int64_t latency_ns;
+ };
+ 
+ static int64_t CMTimeGetNanoseconds(CMTime time)
+@@ -63,6 +75,16 @@
+     struct priv *p = ao->priv;
+     int samplerate = ao->samplerate;
+     int sstride = ao->sstride;
++
++    // Keep only the output latency plus a short margin queued; wait for it to
++    // play instead of racing ahead.
++    int64_t queued_until = p->end_time_av;
++    if (queued_until >= 0 &&
++        queued_until - CMTimeGetNanoseconds([p->synchronizer currentTime]) > p->latency_ns + QUEUE_AHEAD_NS)
++    {
++        usleep(THROTTLE_WAIT_US);
++        return;
++    }
+ 
+     CMBlockBufferRef block_buffer = NULL;
+     CMSampleBufferRef sample_buffer = NULL;
+@@ -74,7 +96,9 @@
+ 
+     int64_t cur_time_av = CMTimeGetNanoseconds([p->synchronizer currentTime]);
+     int64_t cur_time_mp = mp_time_ns();
+-    int64_t end_time_av = MPMAX(p->end_time_av, cur_time_av);
++    // Schedule new audio no earlier than it can actually be heard on this route,
++    // so AirPlay audio isn't dropped as late and mpv times video to match.
++    int64_t end_time_av = MPMAX(p->end_time_av, cur_time_av + p->latency_ns);
+     int64_t time_delta = CMTimeGetNanoseconds(CMTimeMake(request_sample_count, samplerate));
+     bool eof;
+     int real_sample_count = ao_read_data(ao, data, request_sample_count, end_time_av - cur_time_av + cur_time_mp + time_delta, &eof, false, true);
+@@ -145,6 +169,12 @@
+     struct priv *p = ao->priv;
+ 
+     p->end_time_av = -1;
++#if TARGET_OS_IPHONE
++    p->latency_ns = (int64_t)(AVAudioSession.sharedInstance.outputLatency * 1e9);
++#else
++    p->latency_ns = 0;
++#endif
++    MP_VERBOSE(ao, "output latency: %.3f s\n", p->latency_ns / 1e9);
+     [p->synchronizer setRate:1];
+     [p->renderer requestMediaDataWhenReadyOnQueue:p->queue usingBlock:^{
+         feed(ao);
