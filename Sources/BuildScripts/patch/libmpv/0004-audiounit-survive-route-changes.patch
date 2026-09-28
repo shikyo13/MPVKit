@@ -1,0 +1,117 @@
+--- a/audio/out/ao_audiounit.m
++++ b/audio/out/ao_audiounit.m
+@@ -29,11 +29,56 @@
+ #import <AudioToolbox/AudioToolbox.h>
+ #import <AVFoundation/AVFoundation.h>
+ #import <mach/mach_time.h>
++#include <stdatomic.h>
+ 
+ struct priv {
+     AudioUnit audio_unit;
+     double device_latency;
++    // Observes audio route changes and media server resets (block observers).
++    id route_observer;
++    id reset_observer;
++    // Set once a reload has been requested, so the render thread asks only once.
++    atomic_bool reload_requested;
+ };
++
++// Asks the core to reopen the output with the current route's format. Safe to
++// call from any thread, including the real-time render thread.
++static void request_reload(struct ao *ao)
++{
++    struct priv *p = ao->priv;
++    if (!atomic_exchange(&p->reload_requested, true))
++        ao_request_reload(ao);
++}
++
++// True when the buffers the system handed us fit what we are about to write.
++// After an audio route change (HDMI renegotiation, AirPlay, HomePod) the unit
++// can pull with a different buffer layout than the one we configured, and
++// writing our planes into it would crash.
++static bool buffers_fit(struct ao *ao, UInt32 frames, AudioBufferList *buffer_list)
++{
++    if (!buffer_list || buffer_list->mNumberBuffers < (UInt32)ao->num_planes)
++        return false;
++    UInt32 needed = frames * ao->sstride;
++    for (int n = 0; n < ao->num_planes; n++) {
++        const AudioBuffer *buffer = &buffer_list->mBuffers[n];
++        if (!buffer->mData || buffer->mDataByteSize < needed)
++            return false;
++    }
++    return true;
++}
++
++static void output_silence(AudioUnitRenderActionFlags *aflags, AudioBufferList *buffer_list)
++{
++    if (!buffer_list)
++        return;
++    for (UInt32 n = 0; n < buffer_list->mNumberBuffers; n++) {
++        AudioBuffer *buffer = &buffer_list->mBuffers[n];
++        if (buffer->mData)
++            memset(buffer->mData, 0, buffer->mDataByteSize);
++    }
++    if (aflags)
++        *aflags |= kAudioUnitRenderAction_OutputIsSilence;
++}
+ 
+ static OSStatus au_get_ary(AudioUnit unit, AudioUnitPropertyID inID, AudioUnitScope inScope, AudioUnitElement inElement, void **data, UInt32 *outDataSize)
+ {
+@@ -91,6 +136,12 @@
+     struct priv *p = ao->priv;
+     void *planes[MP_NUM_CHANNELS] = {0};
+ 
++    if (!buffers_fit(ao, frames, buffer_list)) {
++        output_silence(aflags, buffer_list);
++        request_reload(ao);
++        return noErr;
++    }
++
+     for (int n = 0; n < ao->num_planes; n++)
+         planes[n] = buffer_list->mBuffers[n].mData;
+ 
+@@ -199,6 +250,27 @@
+ 
+     talloc_free(layout);
+ 
++    // Reopen the output when the route changes, instead of writing a format
++    // the new route doesn't expect.
++    atomic_store(&p->reload_requested, false);
++    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
++    // Built without ARC: keep the observer tokens alive until uninit.
++    p->route_observer = [[center addObserverForName:AVAudioSessionRouteChangeNotification
++                                            object:nil
++                                             queue:nil
++                                        usingBlock:^(NSNotification *note) {
++        AVAudioSessionRouteChangeReason reason =
++            [note.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
++        if (reason != AVAudioSessionRouteChangeReasonCategoryChange)
++            request_reload(ao);
++    }] retain];
++    p->reset_observer = [[center addObserverForName:AVAudioSessionMediaServicesWereResetNotification
++                                            object:nil
++                                             queue:nil
++                                        usingBlock:^(NSNotification *note) {
++        request_reload(ao);
++    }] retain];
++
+     return true;
+ 
+ coreaudio_error_audiounit:
+@@ -231,6 +303,16 @@
+ static void uninit(struct ao *ao)
+ {
+     struct priv *p = ao->priv;
++    if (p->route_observer) {
++        [NSNotificationCenter.defaultCenter removeObserver:p->route_observer];
++        [p->route_observer release];
++        p->route_observer = nil;
++    }
++    if (p->reset_observer) {
++        [NSNotificationCenter.defaultCenter removeObserver:p->reset_observer];
++        [p->reset_observer release];
++        p->reset_observer = nil;
++    }
+     AudioOutputUnitStop(p->audio_unit);
+     AudioUnitUninitialize(p->audio_unit);
+     AudioComponentInstanceDispose(p->audio_unit);

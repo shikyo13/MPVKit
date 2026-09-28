@@ -1,3 +1,9 @@
+> **Fork note (shikyo13/MPVKit):** identical to MPVKit 1.0.0 except that `Libmpv` is rebuilt with
+> [`0004-audiounit-survive-route-changes.patch`](Sources/BuildScripts/patch/libmpv/0004-audiounit-survive-route-changes.patch),
+> which keeps mpv's AudioUnit output (iOS/tvOS) from crashing when the audio route changes (HDMI
+> renegotiation, AirPlay, HomePod, AirPods): it reopens the output on route changes and outputs
+> silence instead of writing into buffers that no longer match. All other binaries are MPVKit's own.
+
 # MPVKit
 
 [![mpv](https://img.shields.io/badge/mpv-v0.41.0-blue.svg)](https://github.com/mpv-player/mpv)
