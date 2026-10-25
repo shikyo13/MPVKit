@@ -1,4 +1,4 @@
-> **Fork note (shikyo13/MPVKit):** identical to MPVKit 1.0.0 except that `Libmpv` is rebuilt with two
+> **Fork note (shikyo13/MPVKit):** based on MPVKit 1.0.0. `Libmpv` is rebuilt with two
 > patches in [`Sources/BuildScripts/patch/libmpv`](Sources/BuildScripts/patch/libmpv):
 > - `0004-audiounit-survive-route-changes.patch` keeps mpv's AudioUnit output (iOS/tvOS) from crashing
 >   when the audio route changes (HDMI renegotiation, AirPlay, HomePod, AirPods).
@@ -7,7 +7,9 @@
 >   of draining mpv's buffer (which caused underruns and stutter), and schedules audio no earlier than
 >   the route can play it.
 >
-> All other binaries are MPVKit's own.
+> `Libavformat` is also rebuilt from the same FFmpeg n8.1.2 source with the VobSub demuxer
+> enabled for iOS, tvOS and their simulators, so external `.idx`/`.sub` pairs can be read.
+> Its macOS, Mac Catalyst and visionOS slices remain upstream, as do all other binaries.
 
 # MPVKit
 

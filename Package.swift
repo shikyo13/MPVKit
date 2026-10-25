@@ -263,8 +263,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "Libavformat",
-            url: "https://github.com/mpvkit/MPVKit/releases/download/1.0.0/Libavformat.xcframework.zip",
-            checksum: "2afb601375929640e743e7bdaa6c4a88e2b582a07e1c5f2dc95cc7f5b26a0810"
+            url: "https://github.com/shikyo13/MPVKit/releases/download/1.0.0-retroguide.3/Libavformat.xcframework.zip",
+            checksum: "6ab61223c699881858eb436170d2b6de3708606381effc82de43df29af603187"
         ),
         .binaryTarget(
             name: "Libavfilter",
