@@ -9,7 +9,12 @@
 >
 > `Libavformat` is also rebuilt from the same FFmpeg n8.1.2 source with the VobSub demuxer
 > enabled for iOS, tvOS and their simulators, so external `.idx`/`.sub` pairs can be read.
-> Its macOS, Mac Catalyst and visionOS slices remain upstream, as do all other binaries.
+> Its macOS, Mac Catalyst and visionOS slices remain upstream.
+>
+> `Libdav1d` 1.5.3 is rebuilt with ARM assembly optimizations enabled for iOS and tvOS
+> devices. This accelerates software AV1 decoding on devices without an AV1 hardware
+> decoder. Its simulator, macOS, Mac Catalyst and visionOS slices remain upstream.
+> All other binaries remain upstream.
 
 # MPVKit
 
@@ -46,6 +51,19 @@ https://github.com/mpvkit/MPVKit.git
 
 
 ## How to build
+
+To build the optimized iOS/tvOS dav1d release artifact, install Meson and Ninja,
+select a full Xcode installation, and run:
+
+```bash
+python3 Tools/build-dav1d.py --output /path/to/release-artifacts
+```
+
+The script pins dav1d's source revision and verifies the upstream archive's SHA-256.
+It replaces only the iOS arm64 and tvOS arm64/arm64e binaries, preserving the other
+XCFramework slices and headers. It writes the ZIP and its checksum to the selected
+directory. Builds use the selected Xcode SDK; use the emitted checksum when updating
+the Swift package's binary target.
 
 ```bash
 make build
