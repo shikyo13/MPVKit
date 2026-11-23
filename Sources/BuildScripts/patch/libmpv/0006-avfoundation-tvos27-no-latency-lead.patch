@@ -1,0 +1,38 @@
+diff --git a/audio/out/ao_avfoundation.m b/audio/out/ao_avfoundation.m
+index 6a33f45..e99d61f 100644
+--- a/audio/out/ao_avfoundation.m
++++ b/audio/out/ao_avfoundation.m
+@@ -169,13 +169,31 @@ static void start(struct ao *ao)
+     struct priv *p = ao->priv;
+ 
+     p->end_time_av = -1;
++    bool schedules_ahead = true;
+ #if TARGET_OS_IPHONE
+     p->latency_ns = (int64_t)(AVAudioSession.sharedInstance.outputLatency * 1e9);
+ #else
+     p->latency_ns = 0;
+ #endif
+-    MP_VERBOSE(ao, "output latency: %.3f s\n", p->latency_ns / 1e9);
+-    [p->synchronizer setRate:1];
++#if TARGET_OS_TV
++    // tvOS 27 accounts for the route's latency itself. Audio scheduled at the
++    // clock's current time plays in sync, and scheduling it `latency_ns` ahead
++    // makes it that much late (measured with a HomePod: 1.9 s late with the
++    // 2 s lead, in sync without it). Up to tvOS 26 the lead is needed.
++    if (@available(tvOS 27.0, *))
++        schedules_ahead = false;
++#endif
++    MP_VERBOSE(ao, "output latency: %.3f s (%s)\n", p->latency_ns / 1e9,
++               schedules_ahead ? "scheduling ahead" : "left to the system");
++    if (schedules_ahead) {
++        [p->synchronizer setRate:1];
++    } else {
++        p->latency_ns = 0;
++        // Each start begins the clock at zero rather than carrying on from the
++        // previous stream.
++        [p->synchronizer setDelaysRateChangeUntilHasSufficientMediaData:NO];
++        [p->synchronizer setRate:1 time:kCMTimeZero];
++    }
+     [p->renderer requestMediaDataWhenReadyOnQueue:p->queue usingBlock:^{
+         feed(ao);
+     }];

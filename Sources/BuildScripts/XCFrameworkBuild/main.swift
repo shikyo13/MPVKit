@@ -4,6 +4,12 @@ do {
     let options = try ArgumentOptions.parse(CommandLine.arguments)
     try Build.performCommand(options)
 
+    // Local iteration: rebuild only mpv against dependencies already built in ./dist.
+    if ProcessInfo.processInfo.environment["MPVKIT_ONLY_MPV"] == "1" {
+        try BuildMPV().buildALL()
+        exit(0)
+    }
+
     // SSL
     try BuildOpenSSL().buildALL()
     try BuildGmp().buildALL()
@@ -396,6 +402,9 @@ private class BuildMPV: BaseBuild {
             "-Djpeg=disabled",
             "-Dvapoursynth=disabled",
             "-Drubberband=disabled",
+            // Never pick up desktop libraries installed on the build machine (Homebrew).
+            "-Dx11=disabled",
+            "-Dx11-clipboard=disabled",
         ]
         if BaseBuild.options.enableGPL {
             array.append("-Dgpl=true")

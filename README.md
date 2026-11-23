@@ -1,4 +1,4 @@
-> **Fork note (shikyo13/MPVKit):** based on MPVKit 1.0.0. `Libmpv` is rebuilt with two
+> **Fork note (shikyo13/MPVKit):** based on MPVKit 1.0.0. `Libmpv` is rebuilt with three
 > patches in [`Sources/BuildScripts/patch/libmpv`](Sources/BuildScripts/patch/libmpv):
 > - `0004-audiounit-survive-route-changes.patch` keeps mpv's AudioUnit output (iOS/tvOS) from crashing
 >   when the audio route changes (HDMI renegotiation, AirPlay, HomePod, AirPods).
@@ -6,6 +6,9 @@
 >   (AVSampleBufferAudioRenderer) so it keeps only the output latency plus half a second queued instead
 >   of draining mpv's buffer (which caused underruns and stutter), and schedules audio no earlier than
 >   the route can play it.
+> - `0006-avfoundation-tvos27-no-latency-lead.patch` stops scheduling audio ahead by the route's
+>   latency on tvOS 27 and later, where the system accounts for it itself. With the lead, HomePod and
+>   AirPlay audio played about two seconds late on tvOS 27.
 >
 > `Libavformat` is also rebuilt from the same FFmpeg n8.1.2 source with the VobSub demuxer
 > enabled for iOS, tvOS and their simulators, so external `.idx`/`.sub` pairs can be read.
